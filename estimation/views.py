@@ -245,18 +245,26 @@ def set_final_estimate(request, task_id):
 def get_session_state(request, session_id):
     """Get current session state for live updates"""
     session = get_object_or_404(EstimationSession, id=session_id)
+    participant_id = request.session.get(f'participant_{session.id}')
 
     participants = list(session.participants.filter(is_online=True).values('id', 'name', 'role'))
 
     current_task = None
+    user_has_voted = False
     if session.current_task:
         votes_count = session.current_task.votes.count()
+
+        # Check if current user has voted on this task
+        if participant_id:
+            user_has_voted = session.current_task.votes.filter(participant_id=participant_id).exists()
+
         current_task = {
             'id': str(session.current_task.id),
             'title': session.current_task.title,
             'is_voting': session.current_task.is_voting,
             'votes_count': votes_count,
             'all_voted': session.current_task.all_voted,
+            'user_has_voted': user_has_voted,
         }
 
     return JsonResponse({

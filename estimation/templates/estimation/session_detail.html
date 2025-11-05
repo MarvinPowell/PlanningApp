@@ -199,6 +199,7 @@
             selectedCard: null,
             hasVoted: false,
             currentTask: null,
+            previousTaskId: null,
             voteCount: 0,
             totalParticipants: 1,
             votingStartedAt: null,
@@ -245,11 +246,32 @@
                     const data = await response.json();
 
                     if (data.current_task) {
+                        // Check if this is a new task being voted on
+                        if (this.previousTaskId !== data.current_task.id) {
+                            // Reset voting state for new task
+                            this.hasVoted = false;
+                            this.selectedCard = null;
+                            this.votingResults = null;
+                            this.timeRemaining = 60;
+
+                            // Clear existing timer
+                            if (this.timerInterval) {
+                                clearInterval(this.timerInterval);
+                                this.timerInterval = null;
+                            }
+
+                            this.previousTaskId = data.current_task.id;
+                        }
+
                         this.currentTask = data.current_task;
                         this.voteCount = data.current_task.votes_count;
                         this.totalParticipants = data.participants.length;
+
+                        // Update hasVoted from server state (more reliable)
+                        this.hasVoted = data.current_task.user_has_voted;
                     } else {
                         this.currentTask = null;
+                        this.previousTaskId = null;
                     }
 
                     if (data.voting_started_at && this.currentTask?.is_voting) {
