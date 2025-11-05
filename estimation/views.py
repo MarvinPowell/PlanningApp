@@ -158,6 +158,33 @@ def start_voting(request, user_story_id):
 
 
 @require_http_methods(["POST"])
+def revote_user_story(request, user_story_id):
+    """Clear all votes and final estimates for a user story and restart voting"""
+    user_story = get_object_or_404(UserStory, id=user_story_id)
+    session = user_story.session
+    participant_id = request.session.get(f'participant_{session.id}')
+    participant = get_object_or_404(Participant, id=participant_id, session=session)
+
+    if participant.role != 'admin':
+        return JsonResponse({'error': 'Only admin can restart voting'}, status=403)
+
+    # Clear all votes for all tasks in this user story
+    for task in user_story.tasks.all():
+        task.votes.all().delete()
+        # Clear final estimates
+        task.final_estimate = None
+        task.save()
+
+    # Update session to start voting
+    session.current_user_story = user_story
+    session.is_voting = True
+    session.voting_started_at = timezone.now()
+    session.save()
+
+    return JsonResponse({'status': 'revoting_started', 'user_story_id': str(user_story.id)})
+
+
+@require_http_methods(["POST"])
 def cast_vote(request, task_id):
     """Cast a vote on a task"""
     task = get_object_or_404(Task, id=task_id)

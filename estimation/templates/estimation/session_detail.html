@@ -131,7 +131,8 @@
         </template>
 
         {% if is_admin %}
-        <div class="mt-2" style="text-align: center;">
+        <div class="mt-2 flex flex-gap" style="justify-content: center;">
+            <button @click="revoteCurrentStory()" class="btn btn-secondary">Re-vote on This Story</button>
             <button @click="finishEstimating()" class="btn">Done - Continue to Next Story</button>
         </div>
         {% endif %}
@@ -170,10 +171,17 @@
                 <div class="flex flex-gap" style="align-items: center;">
                     <span class="task-estimate">Total: {{ story.total_estimate }}</span>
                     {% if is_admin %}
+                    {% if story.total_estimate > 0 %}
+                    <button @click="revoteStory('{{ story.id }}')" class="btn btn-secondary btn-small"
+                            :disabled="isVoting">
+                        Re-vote
+                    </button>
+                    {% else %}
                     <button @click="startVoting('{{ story.id }}')" class="btn btn-small"
                             :disabled="isVoting">
-                        Start Voting on This Story
+                        Start Voting
                     </button>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -242,6 +250,7 @@
             selectedVotes: {},  // Map of task_id to selected card
             isVoting: false,
             currentUserStory: null,
+            currentUserStoryIdForResults: null,  // Store user story ID when showing results
             votingTasks: [],
             previousUserStoryId: null,
             totalParticipants: 1,
@@ -370,6 +379,7 @@
                         // Check if voting ended automatically
                         if (data.voting_ended) {
                             this.votingResults = data.results;
+                            this.currentUserStoryIdForResults = this.currentUserStory?.id;  // Store for re-voting
                             this.tasksWithEstimatesSet = [];  // Reset for new results
                             this.isVoting = false;
                             this.currentUserStory = null;
@@ -406,6 +416,43 @@
                 }
             },
 
+            async revoteStory(userStoryId) {
+                if (!confirm('This will clear all votes and estimates for this user story. Continue?')) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/user-story/${userStoryId}/revote/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        this.pollSessionState();
+                    }
+                } catch (error) {
+                    console.error('Error restarting voting:', error);
+                }
+            },
+
+            revoteCurrentStory() {
+                if (!confirm('This will clear all estimates and restart voting. Continue?')) {
+                    return;
+                }
+
+                // Get the current user story ID from results
+                if (this.votingResults && this.votingResults.length > 0) {
+                    // Find the user story ID - we need to store it when we get results
+                    const userStoryId = this.currentUserStoryIdForResults;
+                    if (userStoryId) {
+                        this.revoteStory(userStoryId);
+                    }
+                }
+            },
+
             async endVoting() {
                 const formData = new FormData();
                 formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
@@ -419,6 +466,7 @@
                     if (response.ok) {
                         const data = await response.json();
                         this.votingResults = data.results;
+                        this.currentUserStoryIdForResults = this.currentUserStory?.id;  // Store for re-voting
                         this.tasksWithEstimatesSet = [];  // Reset for new results
                         this.isVoting = false;
                         this.currentUserStory = null;
