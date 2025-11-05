@@ -13,6 +13,7 @@ An estimation session goes as follows:
 ## Tech Stack
 ### Backend
 - Django 5.2.7
+- SQLite
 
 ### Frontend
 - Django Templates
