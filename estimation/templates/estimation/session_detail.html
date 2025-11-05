@@ -107,19 +107,34 @@
 
                 {% if is_admin %}
                 <div class="mt-2">
-                    <h5>Set Final Estimate:</h5>
-                    <div class="poker-cards">
-                        <template x-for="card in pokerCards" :key="card">
-                            <div class="poker-card"
-                                 @click="setFinalEstimate(taskResult.task_id, card)"
-                                 x-text="card == 999 ? '?' : card">
+                    <template x-if="!tasksWithEstimatesSet.includes(taskResult.task_id)">
+                        <div>
+                            <h5>Set Final Estimate:</h5>
+                            <div class="poker-cards">
+                                <template x-for="card in pokerCards" :key="card">
+                                    <div class="poker-card"
+                                         @click="setFinalEstimate(taskResult.task_id, card)"
+                                         x-text="card == 999 ? '?' : card">
+                                    </div>
+                                </template>
                             </div>
-                        </template>
-                    </div>
+                        </div>
+                    </template>
+                    <template x-if="tasksWithEstimatesSet.includes(taskResult.task_id)">
+                        <div class="alert alert-success">
+                            ✓ Final estimate set!
+                        </div>
+                    </template>
                 </div>
                 {% endif %}
             </div>
         </template>
+
+        {% if is_admin %}
+        <div class="mt-2" style="text-align: center;">
+            <button @click="finishEstimating()" class="btn">Done - Continue to Next Story</button>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Admin Controls -->
@@ -233,6 +248,7 @@
             votingStartedAt: null,
             timeRemaining: 60,
             votingResults: null,
+            tasksWithEstimatesSet: [],  // Track which tasks have final estimates set
             timerInterval: null,
             newUserStory: {
                 title: '',
@@ -279,6 +295,7 @@
                             // Reset voting state for new user story
                             this.selectedVotes = {};
                             this.votingResults = null;
+                            this.tasksWithEstimatesSet = [];
                             this.timeRemaining = 60;
 
                             // Clear existing timer
@@ -353,6 +370,7 @@
                         // Check if voting ended automatically
                         if (data.voting_ended) {
                             this.votingResults = data.results;
+                            this.tasksWithEstimatesSet = [];  // Reset for new results
                             this.isVoting = false;
                             this.currentUserStory = null;
                             this.votingTasks = [];
@@ -401,6 +419,7 @@
                     if (response.ok) {
                         const data = await response.json();
                         this.votingResults = data.results;
+                        this.tasksWithEstimatesSet = [];  // Reset for new results
                         this.isVoting = false;
                         this.currentUserStory = null;
                         this.votingTasks = [];
@@ -426,11 +445,22 @@
                     });
 
                     if (response.ok) {
-                        location.reload();
+                        // Add to the list of tasks with estimates set
+                        if (!this.tasksWithEstimatesSet.includes(taskId)) {
+                            this.tasksWithEstimatesSet.push(taskId);
+                        }
+                        // Don't reload - let admin set estimates for other tasks
                     }
                 } catch (error) {
                     console.error('Error setting estimate:', error);
                 }
+            },
+
+            finishEstimating() {
+                // Clear results and reload to show updated estimates
+                this.votingResults = null;
+                this.tasksWithEstimatesSet = [];
+                location.reload();
             },
 
             async addUserStory() {
