@@ -26,47 +26,60 @@
         </div>
     </div>
 
-    <!-- Current Voting Task -->
-    <div x-show="currentTask" class="card" style="background-color: #e3f2fd;">
-        <h3>Currently Voting</h3>
-        <p x-text="currentTask?.title"></p>
-        <div class="alert alert-info">
-            <span x-text="voteCount"></span> / <span x-text="totalParticipants"></span> participants have voted
-        </div>
+    <!-- Current Voting User Story -->
+    <div x-show="isVoting && currentUserStory" class="card" style="background-color: #e3f2fd;">
+        <h3>Voting: <span x-text="currentUserStory?.title"></span></h3>
+        <p class="text-secondary" x-text="currentUserStory?.description"></p>
 
         <!-- Timer -->
-        <div x-show="votingStartedAt">
+        <div x-show="votingStartedAt" class="alert alert-info">
             <p>Time remaining: <strong x-text="timeRemaining"></strong> seconds</p>
         </div>
 
-        <!-- Voting Cards -->
-        <template x-if="!hasVoted">
-            <div>
-                <h4>Select your estimate:</h4>
-                <div class="poker-cards">
-                    <template x-for="card in pokerCards" :key="card">
-                        <div class="poker-card"
-                             :class="{ 'selected': selectedCard === card }"
-                             @click="selectCard(card)"
-                             x-text="card == 999 ? '?' : card">
+        <!-- Vote on all tasks -->
+        <div style="margin-top: 1.5rem;">
+            <template x-for="task in votingTasks" :key="task.id">
+                <div class="card" style="background-color: white; margin-bottom: 1rem;">
+                    <h4 x-text="task.title"></h4>
+                    <p class="text-secondary" style="font-size: 0.875rem;" x-text="task.description"></p>
+
+                    <div style="margin-top: 0.75rem;">
+                        <span x-text="task.votes_count"></span> / <span x-text="totalParticipants"></span> voted
+                    </div>
+
+                    <!-- Voting Cards for this task -->
+                    <template x-if="!task.user_has_voted">
+                        <div>
+                            <h5 style="margin-top: 1rem;">Select your estimate:</h5>
+                            <div class="poker-cards">
+                                <template x-for="card in pokerCards" :key="card">
+                                    <div class="poker-card"
+                                         :class="{ 'selected': selectedVotes[task.id] === card }"
+                                         @click="selectCardForTask(task.id, card)"
+                                         x-text="card == 999 ? '?' : card">
+                                    </div>
+                                </template>
+                            </div>
+                            <button @click="castVote(task.id)"
+                                    :disabled="!selectedVotes[task.id]"
+                                    class="btn btn-success btn-small">
+                                Submit Vote for This Task
+                            </button>
+                        </div>
+                    </template>
+
+                    <template x-if="task.user_has_voted">
+                        <div class="alert alert-success" style="margin-top: 1rem;">
+                            ✓ You have voted on this task!
                         </div>
                     </template>
                 </div>
-                <button @click="castVote()" :disabled="selectedCard === null" class="btn btn-success">
-                    Submit Vote
-                </button>
-            </div>
-        </template>
-
-        <template x-if="hasVoted">
-            <div class="alert alert-success">
-                You have voted! Waiting for others...
-            </div>
-        </template>
+            </template>
+        </div>
 
         {% if is_admin %}
         <div class="mt-2">
-            <button @click="endVoting()" class="btn btn-secondary btn-small">End Voting Now</button>
+            <button @click="endVoting()" class="btn btn-secondary btn-small">End Voting Now (Admin Override)</button>
         </div>
         {% endif %}
     </div>
@@ -74,31 +87,39 @@
     <!-- Voting Results (shown after voting ends) -->
     <div x-show="votingResults" class="card">
         <h3>Voting Results</h3>
-        <div class="poker-cards">
-            <template x-for="vote in votingResults?.votes" :key="vote.participant__name">
-                <div class="poker-card selected">
-                    <div style="font-size: 0.75rem; position: absolute; top: 5px;" x-text="vote.participant__name"></div>
-                    <div x-text="vote.estimate == 999 ? '?' : vote.estimate"></div>
-                </div>
-            </template>
-        </div>
-        <p style="margin-top: 1rem;">
-            Average: <strong x-text="votingResults?.average"></strong>
-        </p>
+        <template x-for="taskResult in votingResults" :key="taskResult.task_id">
+            <div class="card" style="background-color: var(--bg-secondary); margin-bottom: 1rem;">
+                <h4 x-text="taskResult.task_title"></h4>
 
-        {% if is_admin %}
-        <div class="mt-2">
-            <h4>Set Final Estimate:</h4>
-            <div class="poker-cards">
-                <template x-for="card in pokerCards" :key="card">
-                    <div class="poker-card"
-                         @click="setFinalEstimate(card)"
-                         x-text="card == 999 ? '?' : card">
+                <div class="poker-cards" style="margin-top: 1rem;">
+                    <template x-for="vote in taskResult.votes" :key="vote.participant__name">
+                        <div class="poker-card selected" style="position: relative;">
+                            <div style="font-size: 0.65rem; position: absolute; top: 5px; left: 0; right: 0; text-align: center;"
+                                 x-text="vote.participant__name"></div>
+                            <div style="margin-top: 15px;" x-text="vote.estimate == 999 ? '?' : vote.estimate"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <p style="margin-top: 1rem;">
+                    Average: <strong x-text="taskResult.average"></strong>
+                </p>
+
+                {% if is_admin %}
+                <div class="mt-2">
+                    <h5>Set Final Estimate:</h5>
+                    <div class="poker-cards">
+                        <template x-for="card in pokerCards" :key="card">
+                            <div class="poker-card"
+                                 @click="setFinalEstimate(taskResult.task_id, card)"
+                                 x-text="card == 999 ? '?' : card">
+                            </div>
+                        </template>
                     </div>
-                </template>
+                </div>
+                {% endif %}
             </div>
-        </div>
-        {% endif %}
+        </template>
     </div>
 
     <!-- Admin Controls -->
@@ -131,7 +152,15 @@
         <div class="card" style="background-color: var(--bg-secondary);">
             <div class="flex-between">
                 <h4>{{ story.title }}</h4>
-                <span class="task-estimate">Total: {{ story.total_estimate }}</span>
+                <div class="flex flex-gap" style="align-items: center;">
+                    <span class="task-estimate">Total: {{ story.total_estimate }}</span>
+                    {% if is_admin %}
+                    <button @click="startVoting('{{ story.id }}')" class="btn btn-small"
+                            :disabled="isVoting">
+                        Start Voting on This Story
+                    </button>
+                    {% endif %}
+                </div>
             </div>
             {% if story.description %}
             <p class="text-secondary" style="font-size: 0.875rem;">{{ story.description }}</p>
@@ -140,7 +169,7 @@
             <!-- Tasks -->
             <ul class="task-list" style="margin-top: 1rem;">
                 {% for task in story.tasks.all %}
-                <li class="task-item {% if task.is_voting %}voting{% endif %}">
+                <li class="task-item">
                     <div>
                         <strong>{{ task.title }}</strong>
                         {% if task.description %}
@@ -150,9 +179,8 @@
                     <div class="flex flex-gap" style="align-items: center;">
                         {% if task.final_estimate is not None %}
                         <span class="task-estimate">{{ task.get_final_estimate_display }}</span>
-                        {% endif %}
-                        {% if is_admin and not task.is_voting and task.final_estimate is None %}
-                        <button @click="startVoting('{{ task.id }}')" class="btn btn-small">Start Voting</button>
+                        {% else %}
+                        <span class="text-secondary">Not estimated</span>
                         {% endif %}
                     </div>
                 </li>
@@ -196,11 +224,11 @@
             participantId: '{{ participant.id }}',
             isAdmin: {% if is_admin %}true{% else %}false{% endif %},
             pokerCards: [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 999],
-            selectedCard: null,
-            hasVoted: false,
-            currentTask: null,
-            previousTaskId: null,
-            voteCount: 0,
+            selectedVotes: {},  // Map of task_id to selected card
+            isVoting: false,
+            currentUserStory: null,
+            votingTasks: [],
+            previousUserStoryId: null,
             totalParticipants: 1,
             votingStartedAt: null,
             timeRemaining: 60,
@@ -233,10 +261,7 @@
 
             handleWebSocketMessage(data) {
                 if (data.type === 'vote_update') {
-                    this.voteCount = data.vote_count;
-                    if (data.all_voted) {
-                        location.reload();
-                    }
+                    this.pollSessionState();
                 }
             },
 
@@ -245,12 +270,14 @@
                     const response = await fetch(`/session/${this.sessionId}/state/`);
                     const data = await response.json();
 
-                    if (data.current_task) {
-                        // Check if this is a new task being voted on
-                        if (this.previousTaskId !== data.current_task.id) {
-                            // Reset voting state for new task
-                            this.hasVoted = false;
-                            this.selectedCard = null;
+                    this.isVoting = data.is_voting;
+                    this.totalParticipants = data.participants.length;
+
+                    if (data.current_user_story) {
+                        // Check if this is a new user story being voted on
+                        if (this.previousUserStoryId !== data.current_user_story.id) {
+                            // Reset voting state for new user story
+                            this.selectedVotes = {};
                             this.votingResults = null;
                             this.timeRemaining = 60;
 
@@ -260,21 +287,23 @@
                                 this.timerInterval = null;
                             }
 
-                            this.previousTaskId = data.current_task.id;
+                            this.previousUserStoryId = data.current_user_story.id;
                         }
 
-                        this.currentTask = data.current_task;
-                        this.voteCount = data.current_task.votes_count;
-                        this.totalParticipants = data.participants.length;
+                        this.currentUserStory = data.current_user_story;
+                        this.votingTasks = data.voting_tasks;
 
-                        // Update hasVoted from server state (more reliable)
-                        this.hasVoted = data.current_task.user_has_voted;
+                        // Check if voting ended and we have all votes
+                        if (!this.isVoting && this.previousUserStoryId) {
+                            // Voting just ended, we'll get results from the last vote
+                        }
                     } else {
-                        this.currentTask = null;
-                        this.previousTaskId = null;
+                        this.currentUserStory = null;
+                        this.votingTasks = [];
+                        this.previousUserStoryId = null;
                     }
 
-                    if (data.voting_started_at && this.currentTask?.is_voting) {
+                    if (data.voting_started_at && this.isVoting) {
                         this.startTimer(data.voting_started_at);
                     }
                 } catch (error) {
@@ -301,45 +330,58 @@
                 }, 1000);
             },
 
-            selectCard(card) {
-                this.selectedCard = card;
+            selectCardForTask(taskId, card) {
+                this.selectedVotes[taskId] = card;
             },
 
-            async castVote() {
-                if (this.selectedCard === null) return;
+            async castVote(taskId) {
+                if (!this.selectedVotes[taskId]) return;
 
                 const formData = new FormData();
-                formData.append('estimate', this.selectedCard);
+                formData.append('estimate', this.selectedVotes[taskId]);
                 formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
                 try {
-                    const response = await fetch(`/task/${this.currentTask.id}/cast-vote/`, {
+                    const response = await fetch(`/task/${taskId}/cast-vote/`, {
                         method: 'POST',
                         body: formData
                     });
 
                     if (response.ok) {
-                        this.hasVoted = true;
                         const data = await response.json();
-                        this.voteCount = data.vote_count;
+
+                        // Check if voting ended automatically
+                        if (data.voting_ended) {
+                            this.votingResults = data.results;
+                            this.isVoting = false;
+                            this.currentUserStory = null;
+                            this.votingTasks = [];
+                            if (this.timerInterval) {
+                                clearInterval(this.timerInterval);
+                                this.timerInterval = null;
+                            }
+                        } else {
+                            // Refresh state to update vote counts
+                            this.pollSessionState();
+                        }
                     }
                 } catch (error) {
                     console.error('Error casting vote:', error);
                 }
             },
 
-            async startVoting(taskId) {
+            async startVoting(userStoryId) {
                 const formData = new FormData();
                 formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
                 try {
-                    const response = await fetch(`/task/${taskId}/start-voting/`, {
+                    const response = await fetch(`/user-story/${userStoryId}/start-voting/`, {
                         method: 'POST',
                         body: formData
                     });
 
                     if (response.ok) {
-                        location.reload();
+                        this.pollSessionState();
                     }
                 } catch (error) {
                     console.error('Error starting voting:', error);
@@ -347,21 +389,21 @@
             },
 
             async endVoting() {
-                if (!this.currentTask) return;
-
                 const formData = new FormData();
                 formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
                 try {
-                    const response = await fetch(`/task/${this.currentTask.id}/end-voting/`, {
+                    const response = await fetch(`/session/${this.sessionId}/end-voting/`, {
                         method: 'POST',
                         body: formData
                     });
 
                     if (response.ok) {
                         const data = await response.json();
-                        this.votingResults = data;
-                        this.currentTask = null;
+                        this.votingResults = data.results;
+                        this.isVoting = false;
+                        this.currentUserStory = null;
+                        this.votingTasks = [];
                         if (this.timerInterval) {
                             clearInterval(this.timerInterval);
                             this.timerInterval = null;
@@ -372,10 +414,7 @@
                 }
             },
 
-            async setFinalEstimate(estimate) {
-                if (!this.votingResults) return;
-
-                const taskId = this.currentTask?.id;
+            async setFinalEstimate(taskId, estimate) {
                 const formData = new FormData();
                 formData.append('estimate', estimate);
                 formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');

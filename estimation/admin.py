@@ -25,8 +25,8 @@ class UserStoryAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ['title', 'user_story', 'final_estimate', 'is_voting', 'created_at']
-    list_filter = ['is_voting', 'final_estimate', 'created_at']
+    list_display = ['title', 'user_story', 'final_estimate', 'created_at']
+    list_filter = ['final_estimate', 'created_at']
     search_fields = ['title', 'description']
 
 

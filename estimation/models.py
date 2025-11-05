@@ -9,9 +9,10 @@ class EstimationSession(models.Model):
     name = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
-    current_task = models.ForeignKey('Task', null=True, blank=True, on_delete=models.SET_NULL, related_name='active_in_sessions')
+    current_user_story = models.ForeignKey('UserStory', null=True, blank=True, on_delete=models.SET_NULL, related_name='active_in_sessions')
     voting_timer_seconds = models.IntegerField(default=60)  # Default 60 seconds for voting
     voting_started_at = models.DateTimeField(null=True, blank=True)
+    is_voting = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -59,6 +60,21 @@ class UserStory(models.Model):
         """Sum of all task estimates"""
         return sum(task.final_estimate or 0 for task in self.tasks.all())
 
+    def all_tasks_voted(self):
+        """Check if all participants have voted on all tasks"""
+        tasks = self.tasks.filter(final_estimate__isnull=True)
+        if not tasks.exists():
+            return False
+
+        total_participants = self.session.participants.filter(is_online=True).count()
+        if total_participants == 0:
+            return False
+
+        for task in tasks:
+            if task.votes.count() < total_participants:
+                return False
+        return True
+
     class Meta:
         ordering = ['order', 'created_at']
         verbose_name_plural = 'User stories'
@@ -87,7 +103,6 @@ class Task(models.Model):
     description = models.TextField(blank=True)
     order = models.IntegerField(default=0)
     final_estimate = models.IntegerField(null=True, blank=True, choices=ESTIMATE_CHOICES)
-    is_voting = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -95,10 +110,16 @@ class Task(models.Model):
 
     @property
     def all_voted(self):
-        """Check if all participants have voted"""
+        """Check if all participants have voted on this task"""
         total_participants = self.user_story.session.participants.filter(is_online=True).count()
         total_votes = self.votes.count()
         return total_participants > 0 and total_votes >= total_participants
+
+    @property
+    def is_voting(self):
+        """Check if this task is currently being voted on"""
+        session = self.user_story.session
+        return session.is_voting and session.current_user_story_id == self.user_story_id
 
     class Meta:
         ordering = ['order', 'created_at']
