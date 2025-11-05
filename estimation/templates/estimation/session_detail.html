@@ -1,0 +1,419 @@
+{% extends 'estimation/base.html' %}
+
+{% block title %}{{ session.name }}{% endblock %}
+
+{% block header_right %}
+<div class="participants">
+    <span class="participant admin">
+        <span class="online-indicator"></span>
+        {{ participant.name }} (You{% if is_admin %} - Admin{% endif %})
+    </span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div x-data="sessionApp()">
+    <!-- Session Info -->
+    <div class="card">
+        <div class="flex-between">
+            <div>
+                <h2>{{ session.name }}</h2>
+                <p class="text-secondary">
+                    Session Link: <code>{{ request.build_absolute_uri }}</code>
+                    <button onclick="navigator.clipboard.writeText('{{ request.build_absolute_uri }}')" class="btn btn-small" style="margin-left: 1rem;">Copy Link</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Voting Task -->
+    <div x-show="currentTask" class="card" style="background-color: #e3f2fd;">
+        <h3>Currently Voting</h3>
+        <p x-text="currentTask?.title"></p>
+        <div class="alert alert-info">
+            <span x-text="voteCount"></span> / <span x-text="totalParticipants"></span> participants have voted
+        </div>
+
+        <!-- Timer -->
+        <div x-show="votingStartedAt">
+            <p>Time remaining: <strong x-text="timeRemaining"></strong> seconds</p>
+        </div>
+
+        <!-- Voting Cards -->
+        <template x-if="!hasVoted">
+            <div>
+                <h4>Select your estimate:</h4>
+                <div class="poker-cards">
+                    <template x-for="card in pokerCards" :key="card">
+                        <div class="poker-card"
+                             :class="{ 'selected': selectedCard === card }"
+                             @click="selectCard(card)"
+                             x-text="card == 999 ? '?' : card">
+                        </div>
+                    </template>
+                </div>
+                <button @click="castVote()" :disabled="selectedCard === null" class="btn btn-success">
+                    Submit Vote
+                </button>
+            </div>
+        </template>
+
+        <template x-if="hasVoted">
+            <div class="alert alert-success">
+                You have voted! Waiting for others...
+            </div>
+        </template>
+
+        {% if is_admin %}
+        <div class="mt-2">
+            <button @click="endVoting()" class="btn btn-secondary btn-small">End Voting Now</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Voting Results (shown after voting ends) -->
+    <div x-show="votingResults" class="card">
+        <h3>Voting Results</h3>
+        <div class="poker-cards">
+            <template x-for="vote in votingResults?.votes" :key="vote.participant__name">
+                <div class="poker-card selected">
+                    <div style="font-size: 0.75rem; position: absolute; top: 5px;" x-text="vote.participant__name"></div>
+                    <div x-text="vote.estimate == 999 ? '?' : vote.estimate"></div>
+                </div>
+            </template>
+        </div>
+        <p style="margin-top: 1rem;">
+            Average: <strong x-text="votingResults?.average"></strong>
+        </p>
+
+        {% if is_admin %}
+        <div class="mt-2">
+            <h4>Set Final Estimate:</h4>
+            <div class="poker-cards">
+                <template x-for="card in pokerCards" :key="card">
+                    <div class="poker-card"
+                         @click="setFinalEstimate(card)"
+                         x-text="card == 999 ? '?' : card">
+                    </div>
+                </template>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Admin Controls -->
+    {% if is_admin %}
+    <div class="card">
+        <h3>Admin Controls</h3>
+
+        <div style="margin-bottom: 2rem;">
+            <h4>Add User Story</h4>
+            <form @submit.prevent="addUserStory()">
+                <div class="input-group">
+                    <label>User Story Title</label>
+                    <input type="text" x-model="newUserStory.title" required placeholder="As a user, I want to...">
+                </div>
+                <div class="input-group">
+                    <label>Description (optional)</label>
+                    <textarea x-model="newUserStory.description" placeholder="Additional details..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-small">Add User Story</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- User Stories and Tasks -->
+    <div class="card">
+        <h3>User Stories & Tasks</h3>
+
+        {% for story in user_stories %}
+        <div class="card" style="background-color: var(--bg-secondary);">
+            <div class="flex-between">
+                <h4>{{ story.title }}</h4>
+                <span class="task-estimate">Total: {{ story.total_estimate }}</span>
+            </div>
+            {% if story.description %}
+            <p class="text-secondary" style="font-size: 0.875rem;">{{ story.description }}</p>
+            {% endif %}
+
+            <!-- Tasks -->
+            <ul class="task-list" style="margin-top: 1rem;">
+                {% for task in story.tasks.all %}
+                <li class="task-item {% if task.is_voting %}voting{% endif %}">
+                    <div>
+                        <strong>{{ task.title }}</strong>
+                        {% if task.description %}
+                        <p class="text-secondary" style="font-size: 0.875rem; margin-top: 0.25rem;">{{ task.description }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-gap" style="align-items: center;">
+                        {% if task.final_estimate is not None %}
+                        <span class="task-estimate">{{ task.get_final_estimate_display }}</span>
+                        {% endif %}
+                        {% if is_admin and not task.is_voting and task.final_estimate is None %}
+                        <button @click="startVoting('{{ task.id }}')" class="btn btn-small">Start Voting</button>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <!-- Add Task Form (Admin Only) -->
+            {% if is_admin %}
+            <div style="margin-top: 1rem;" x-data="{ showForm: false }">
+                <button @click="showForm = !showForm" class="btn btn-secondary btn-small">
+                    <span x-text="showForm ? 'Cancel' : '+ Add Task'"></span>
+                </button>
+
+                <form x-show="showForm" @submit.prevent="addTask('{{ story.id }}')" style="margin-top: 1rem;">
+                    <div class="input-group">
+                        <label>Task Title</label>
+                        <input type="text" x-model="newTask.title" required placeholder="Implement login form">
+                    </div>
+                    <div class="input-group">
+                        <label>Description (optional)</label>
+                        <textarea x-model="newTask.description" placeholder="Additional details..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-small">Add Task</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-secondary">No user stories yet. {% if is_admin %}Add one above to get started!{% endif %}</p>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function sessionApp() {
+        return {
+            sessionId: '{{ session.id }}',
+            participantId: '{{ participant.id }}',
+            isAdmin: {% if is_admin %}true{% else %}false{% endif %},
+            pokerCards: [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 999],
+            selectedCard: null,
+            hasVoted: false,
+            currentTask: null,
+            voteCount: 0,
+            totalParticipants: 1,
+            votingStartedAt: null,
+            timeRemaining: 60,
+            votingResults: null,
+            timerInterval: null,
+            newUserStory: {
+                title: '',
+                description: ''
+            },
+            newTask: {
+                title: '',
+                description: ''
+            },
+
+            init() {
+                this.connectWebSocket();
+                this.pollSessionState();
+                setInterval(() => this.pollSessionState(), 2000);
+            },
+
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const ws = new WebSocket(`${protocol}//${window.location.host}/ws/session/${this.sessionId}/`);
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleWebSocketMessage(data);
+                };
+            },
+
+            handleWebSocketMessage(data) {
+                if (data.type === 'vote_update') {
+                    this.voteCount = data.vote_count;
+                    if (data.all_voted) {
+                        location.reload();
+                    }
+                }
+            },
+
+            async pollSessionState() {
+                try {
+                    const response = await fetch(`/session/${this.sessionId}/state/`);
+                    const data = await response.json();
+
+                    if (data.current_task) {
+                        this.currentTask = data.current_task;
+                        this.voteCount = data.current_task.votes_count;
+                        this.totalParticipants = data.participants.length;
+                    } else {
+                        this.currentTask = null;
+                    }
+
+                    if (data.voting_started_at && this.currentTask?.is_voting) {
+                        this.startTimer(data.voting_started_at);
+                    }
+                } catch (error) {
+                    console.error('Error polling session state:', error);
+                }
+            },
+
+            startTimer(startTime) {
+                if (this.timerInterval) return;
+
+                this.timerInterval = setInterval(() => {
+                    const now = new Date();
+                    const start = new Date(startTime);
+                    const elapsed = Math.floor((now - start) / 1000);
+                    this.timeRemaining = Math.max(60 - elapsed, 0);
+
+                    if (this.timeRemaining === 0) {
+                        clearInterval(this.timerInterval);
+                        this.timerInterval = null;
+                        if (this.isAdmin) {
+                            this.endVoting();
+                        }
+                    }
+                }, 1000);
+            },
+
+            selectCard(card) {
+                this.selectedCard = card;
+            },
+
+            async castVote() {
+                if (this.selectedCard === null) return;
+
+                const formData = new FormData();
+                formData.append('estimate', this.selectedCard);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/task/${this.currentTask.id}/cast-vote/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        this.hasVoted = true;
+                        const data = await response.json();
+                        this.voteCount = data.vote_count;
+                    }
+                } catch (error) {
+                    console.error('Error casting vote:', error);
+                }
+            },
+
+            async startVoting(taskId) {
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/task/${taskId}/start-voting/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error starting voting:', error);
+                }
+            },
+
+            async endVoting() {
+                if (!this.currentTask) return;
+
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/task/${this.currentTask.id}/end-voting/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.votingResults = data;
+                        this.currentTask = null;
+                        if (this.timerInterval) {
+                            clearInterval(this.timerInterval);
+                            this.timerInterval = null;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error ending voting:', error);
+                }
+            },
+
+            async setFinalEstimate(estimate) {
+                if (!this.votingResults) return;
+
+                const taskId = this.currentTask?.id;
+                const formData = new FormData();
+                formData.append('estimate', estimate);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/task/${taskId}/set-estimate/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error setting estimate:', error);
+                }
+            },
+
+            async addUserStory() {
+                const formData = new FormData();
+                formData.append('title', this.newUserStory.title);
+                formData.append('description', this.newUserStory.description);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/session/${this.sessionId}/add-user-story/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        this.newUserStory = { title: '', description: '' };
+                        location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error adding user story:', error);
+                }
+            },
+
+            async addTask(userStoryId) {
+                const formData = new FormData();
+                formData.append('title', this.newTask.title);
+                formData.append('description', this.newTask.description);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                try {
+                    const response = await fetch(`/user-story/${userStoryId}/add-task/`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        this.newTask = { title: '', description: '' };
+                        location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error adding task:', error);
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}

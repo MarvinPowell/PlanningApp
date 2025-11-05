@@ -1,0 +1,29 @@
+{% extends 'estimation/base.html' %}
+
+{% block title %}Create Session{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 2rem auto;">
+    <div class="card">
+        <h2>Create Estimation Session</h2>
+        <form method="post" action="{% url 'create_session' %}">
+            {% csrf_token %}
+
+            <div class="input-group">
+                <label for="session_name">Session Name</label>
+                <input type="text" id="session_name" name="session_name" required placeholder="Sprint 24 Planning">
+            </div>
+
+            <div class="input-group">
+                <label for="admin_name">Your Name (Admin)</label>
+                <input type="text" id="admin_name" name="admin_name" required placeholder="John Doe">
+            </div>
+
+            <div class="flex flex-gap">
+                <button type="submit" class="btn">Create Session</button>
+                <a href="{% url 'index' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

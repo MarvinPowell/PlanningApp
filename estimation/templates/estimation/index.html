@@ -1,0 +1,30 @@
+{% extends 'estimation/base.html' %}
+
+{% block title %}Planning Poker - Home{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 4rem auto;">
+    <div class="card text-center">
+        <h2>Welcome to Planning Poker</h2>
+        <p class="text-secondary mb-2">
+            Estimate your backlog collaboratively with your team using planning poker cards.
+        </p>
+
+        <div class="flex flex-gap" style="justify-content: center; margin-top: 2rem;">
+            <a href="{% url 'create_session' %}" class="btn">Create New Session</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>How it works</h3>
+        <ol style="padding-left: 1.5rem; line-height: 2;">
+            <li>Admin creates an estimation session</li>
+            <li>Team members join using the session link</li>
+            <li>Admin adds user stories and tasks</li>
+            <li>Everyone votes on task estimates using planning poker cards</li>
+            <li>Results are revealed when everyone votes or timer expires</li>
+            <li>Admin sets the final estimate</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'estimation/base.html' %}
+
+{% block title %}Join Session{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 2rem auto;">
+    <div class="card">
+        <h2>Join Session: {{ session.name }}</h2>
+        <p class="text-secondary mb-2">Enter your name to join this estimation session</p>
+
+        <form method="post" action="{% url 'join_session' session.id %}">
+            {% csrf_token %}
+
+            <div class="input-group">
+                <label for="participant_name">Your Name</label>
+                <input type="text" id="participant_name" name="participant_name" required placeholder="Jane Smith">
+            </div>
+
+            <button type="submit" class="btn">Join Session</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
